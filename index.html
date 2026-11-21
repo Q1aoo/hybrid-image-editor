@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hybrid Localized AI Image Editor — A2 Interactive Prototype</title>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --warn: #d97706;
+      --warn-bg: #fffbeb;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 20px;
+    }
+
+    .app-container {
+      max-width: 1160px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+      background: var(--panel);
+      padding: 16px 22px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    header p {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .scope-badge {
+      font-size: 0.78rem;
+      background: #eef2ff;
+      color: var(--primary);
+      border: 1px solid #c7d2fe;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    @media (max-width: 920px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .section-tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .tag-human { background: #dbeafe; color: #1d4ed8; }
+    .tag-ai { background: #f3e8ff; color: #7e22ce; }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .toolbar label {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button {
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.84rem;
+      font-weight: 600;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      padding: 7px 12px;
+      transition: all 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+    }
+
+    .btn-subtle {
+      font-size: 0.78rem;
+      padding: 5px 10px;
+      background: #f8fafc;
+    }
+
+    .canvas-stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 540 / 380;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid #cbd5e1;
+      background: #e2e8f0;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .canvas-stage canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #maskCanvas {
+      opacity: 0.44;
+      cursor: crosshair;
+    }
+
+    #fxCanvas {
+      pointer-events: none;
+    }
+
+    .status-overlay {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.88);
+      color: #fff;
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      z-index: 10;
+    }
+
+    .status-overlay.visible { display: inline-flex; }
+
+    .pulse-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #38bdf8;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.45); opacity: 0.45; }
+    }
+
+    .coords-bar {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .prompt-area {
+      margin-top: 14px;
+    }
+
+    .prompt-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .prompt-row input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+
+    .prompt-row input:focus {
+      outline: 2px solid #c7d2fe;
+      border-color: var(--primary);
+    }
+
+    .presets {
+      margin-top: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .presets span {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .toast {
+      margin-top: 10px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      display: none;
+    }
+
+    .toast.show { display: block; }
+    .toast-success { background: var(--success-bg); color: #065f46; border: 1px solid #a7f3d0; }
+    .toast-danger { background: var(--danger-bg); color: #991b1b; border: 1px solid #fecaca; }
+    .toast-warn { background: var(--warn-bg); color: #92400e; border: 1px solid #fde68a; }
+
+    .inspector-block {
+      margin-bottom: 14px;
+    }
+
+    .inspector-block h3 {
+      font-size: 0.86rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pill {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: #475569;
+    }
+
+    .pill-sim { background: #fef3c7; color: #92400e; }
+    .pill-impl { background: #dcfce7; color: #166534; }
+
+    pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      min-height: 92px;
+      line-height: 1.45;
+    }
+
+    .check-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .check-list li {
+      font-size: 0.82rem;
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .badge-pass { color: var(--success); font-weight: 700; }
+    .badge-fail { color: var(--danger); font-weight: 700; }
+    .badge-wait { color: var(--muted); font-weight: 600; }
+
+    .placeholder-note {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      font-size: 0.79rem;
+      color: #78350f;
+    }
+
+    .placeholder-note strong { display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <div>
+        <h1>Hybrid Localized AI Image Editor (Interactive Prototype)</h1>
+        <p>Direct-manipulation brush mask + natural language intent parser with validation guardrails (A2 Deliverable)</p>
+      </div>
+      <span class="scope-badge">Implemented UI Slice + Simulated AI Placeholders</span>
+    </header>
+
+    <div class="workspace">
+      <!-- LEFT PANEL: HUMAN IN CONTROL -->
+      <section class="card">
+        <span class="section-tag tag-human">Human in Control — Direct Manipulation & Recovery</span>
+
+        <div class="toolbar">
+          <label>
+            Brush Size
+            <input id="brushSize" type="range" min="10" max="54" value="28" />
+            <span id="brushSizeVal">28px</span>
+          </label>
+          <button id="clearMaskBtn" title="Clear spatial mask only">Clear Mask</button>
+          <button id="undoBtn" disabled title="Revert last edit while preserving mask (Amershi G12)">↺ Undo</button>
+          <button id="redoBtn" disabled>↻ Redo</button>
+          <button id="resetAllBtn">Reset All</button>
+        </div>
+
+        <div class="canvas-stage" id="canvasStage">
+          <canvas id="baseCanvas" width="540" height="380"></canvas>
+          <canvas id="editCanvas" width="540" height="380"></canvas>
+          <canvas id="maskCanvas" width="540" height="380"></canvas>
+          <canvas id="fxCanvas" width="540" height="380"></canvas>
+          <div class="status-overlay" id="statusOverlay">
+            <span class="pulse-dot"></span>
+            <span>Generating inside mask...</span>
+          </div>
+        </div>
+
+        <div class="coords-bar">
+          <span id="maskCoordsText">Spatial Mask: None (paint over the target area on the image)</span>
+          <span id="historyText">Committed Edits: 0</span>
+        </div>
+
+        <div class="prompt-area">
+          <label for="promptInput" style="font-size:0.84rem; font-weight:600;">Natural Language Prompt</label>
+          <div class="prompt-row">
+            <input id="promptInput" type="text" placeholder="e.g., Add a bright red winter hat" value="Add a bright red winter hat" />
+            <button id="generateBtn" class="btn-primary">Generate Edit</button>
+          </div>
+
+          <div class="presets">
+            <span>Quick Test Cases:</span>
+            <button class="btn-subtle" data-prompt="Add a bright red winter hat">Test A: Red Hat (Normal)</button>
+            <button class="btn-subtle" data-prompt="Add blue sunglasses">Blue Sunglasses</button>
+            <button class="btn-subtle" data-prompt="Add a yellow scarf">Yellow Scarf</button>
+            <button class="btn-subtle" data-prompt="Change the whole image into a cyberpunk style and make it night time">Test B: Global Conflict</button>
+            <button class="btn-subtle" data-prompt="Add a red hat and blue shoes">Lab 3: Multi-Object</button>
+            <button class="btn-subtle" data-prompt="Make the cat look happier">Lab 4: Ambiguous</button>
+          </div>
+
+          <div id="feedbackToast" class="toast"></div>
+        </div>
+      </section>
+
+      <!-- RIGHT PANEL: AI PARSING & VALIDATION HARNESS -->
+      <section class="card">
+        <span class="section-tag tag-ai">AI Pipeline — Simulated Parser & Validation Harness</span>
+
+        <div class="inspector-block">
+          <h3>
+            1. LLM Intent Parser Output (JSON)
+            <span class="pill pill-sim">Simulated Placeholder</span>
+          </h3>
+          <pre id="jsonOutput">{
+  "status": "idle",
+  "hint": "Paint a brush mask on the cat (e.g., head), enter a prompt, and click Generate Edit."
+}</pre>
+        </div>
+
+        <div class="inspector-block">
+          <h3>
+            2. Backend Validation Harness (Guardrails)
+            <span class="pill pill-impl">Implemented Logic</span>
+          </h3>
+          <ul class="check-list" id="guardrailList">
+            <li><span>Spatial mask present</span><span class="badge-wait" id="chkMask">Waiting</span></li>
+            <li><span>Local scope check (rejects global edits)</span><span class="badge-wait" id="chkScope">Waiting</span></li>
+            <li><span>Single-object check (Lab 3 revision)</span><span class="badge-wait" id="chkSingle">Waiting</span></li>
+            <li><span>Mask area sufficiency (G11 check)</span><span class="badge-wait" id="chkSize">Waiting</span></li>
+          </ul>
+        </div>
+
+        <div class="inspector-block">
+          <h3>
+            3. System Control & Interaction Log
+            <span class="pill pill-impl">Live Trace</span>
+          </h3>
+          <pre id="traceLog" style="min-height: 112px;">[Ready] Human holds spatial control (brush mask) and task intent (prompt).
+[Ready] Click Undo after an edit to verify Amershi G12 (active mask & prompt memory).</pre>
+        </div>
+
+        <div class="placeholder-note">
+          <strong>Honest Scope & Placeholder Notice (A2 Requirement)</strong>
+          <strong>Implemented:</strong> HTML5 Canvas brush masking, live bounding-box coordinate extraction, pulsing visibility border ("Generating inside mask..."), rule-based validation harness, G11 explainable error alerts, and G9/G12 Undo/Redo with active mask retention.<br />
+          <strong>Simulated Placeholders:</strong> Live LLM API inference (simulated locally via rule-based JSON parser matching <code>02_PROMPT_LOG.md</code>) and diffusion pixel rendering (simulated via constrained vector rendering clipped inside mask bounds).
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const baseCanvas = document.getElementById('baseCanvas');
+    const editCanvas = document.getElementById('editCanvas');
+    const maskCanvas = document.getElementById('maskCanvas');
+    const fxCanvas = document.getElementById('fxCanvas');
+
+    const baseCtx = baseCanvas.getContext('2d');
+    const editCtx = editCanvas.getContext('2d');
+    const maskCtx = maskCanvas.getContext('2d');
+    const fxCtx = fxCanvas.getContext('2d');
+
+    const brushSizeInput = document.getElementById('brushSize');
+    const brushSizeVal = document.getElementById('brushSizeVal');
+    const clearMaskBtn = document.getElementById('clearMaskBtn');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const resetAllBtn = document.getElementById('resetAllBtn');
+    const promptInput = document.getElementById('promptInput');
+    const generateBtn = document.getElementById('generateBtn');
+    const statusOverlay = document.getElementById('statusOverlay');
+    const maskCoordsText = document.getElementById('maskCoordsText');
+    const historyText = document.getElementById('historyText');
+    const feedbackToast = document.getElementById('feedbackToast');
+    const jsonOutput = document.getElementById('jsonOutput');
+    const traceLog = document.getElementById('traceLog');
+
+    const chkMask = document.getElementById('chkMask');
+    const chkScope = document.getElementById('chkScope');
+    const chkSingle = document.getElementById('chkSingle');
+    const chkSize = document.getElementById('chkSize');
+
+    let isDrawing = false;
+    let isGenerating = false;
+    let animFrameId = null;
+    let editHistory = [];
+    let redoStack = [];
+    let logs = [];
+
+    function addLog(msg) {
+      const time = new Date().toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      logs.unshift(`[${time}] ${msg}`);
+      if (logs.length > 8) logs.pop();
+      traceLog.textContent = logs.join('\n');
+    }
+
+    function showToast(type, message) {
+      feedbackToast.className = `toast show toast-${type}`;
+      feedbackToast.textContent = message;
+    }
+
+    function clearToast() {
+      feedbackToast.className = 'toast';
+      feedbackToast.textContent = '';
+    }
+
+    // Draw clean base illustration (Ginger cat in studio setting)
+    function drawBaseScene() {
+      const w = baseCanvas.width;
+      const h = baseCanvas.height;
+
+      // Soft studio background
+      const bgGrad = baseCtx.createLinearGradient(0, 0, 0, h);
+      bgGrad.addColorStop(0, '#f0f9ff');
+      bgGrad.addColorStop(0.7, '#e0f2fe');
+      bgGrad.addColorStop(1, '#cbd5e1');
+      baseCtx.fillStyle = bgGrad;
+      baseCtx.fillRect(0, 0, w, h);
+
+      // Subtle window/hill background accents
+      baseCtx.fillStyle = 'rgba(255,255,255,0.55)';
+      baseCtx.beginPath();
+      baseCtx.arc(445, 78, 36, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Floor shadow
+      baseCtx.fillStyle = 'rgba(100, 116, 139, 0.22)';
+      baseCtx.beginPath();
+      baseCtx.ellipse(270, 336, 110, 20, 0, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Tail
+      baseCtx.strokeStyle = '#ea580c';
+      baseCtx.lineWidth = 18;
+      baseCtx.lineCap = 'round';
+      baseCtx.beginPath();
+      baseCtx.moveTo(325, 315);
+      baseCtx.quadraticCurveTo(405, 305, 395, 240);
+      baseCtx.stroke();
+
+      // Body
+      baseCtx.fillStyle = '#fb923c';
+      baseCtx.beginPath();
+      baseCtx.ellipse(270, 278, 66, 62, 0, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Belly patch
+      baseCtx.fillStyle = '#ffedd5';
+      baseCtx.beginPath();
+      baseCtx.ellipse(270, 286, 36, 40, 0, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Paws
+      baseCtx.fillStyle = '#fff7ed';
+      baseCtx.beginPath();
+      baseCtx.ellipse(242, 332, 20, 12, 0, 0, Math.PI * 2);
+      baseCtx.ellipse(298, 332, 20, 12, 0, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Ears
+      baseCtx.fillStyle = '#ea580c';
+      baseCtx.beginPath();
+      baseCtx.moveTo(216, 145);
+      baseCtx.lineTo(205, 96);
+      baseCtx.lineTo(250, 122);
+      baseCtx.closePath();
+      baseCtx.fill();
+
+      baseCtx.beginPath();
+      baseCtx.moveTo(324, 145);
+      baseCtx.lineTo(335, 96);
+      baseCtx.lineTo(290, 122);
+      baseCtx.closePath();
+      baseCtx.fill();
+
+      // Inner ears
+      baseCtx.fillStyle = '#fda4af';
+      baseCtx.beginPath();
+      baseCtx.moveTo(220, 138);
+      baseCtx.lineTo(213, 108);
+      baseCtx.lineTo(242, 124);
+      baseCtx.closePath();
+      baseCtx.fill();
+
+      baseCtx.beginPath();
+      baseCtx.moveTo(320, 138);
+      baseCtx.lineTo(327, 108);
+      baseCtx.lineTo(298, 124);
+      baseCtx.closePath();
+      baseCtx.fill();
+
+      // Head
+      baseCtx.fillStyle = '#fb923c';
+      baseCtx.beginPath();
+      baseCtx.arc(270, 174, 62, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Forehead stripes
+      baseCtx.strokeStyle = '#c2410c';
+      baseCtx.lineWidth = 4;
+      baseCtx.lineCap = 'round';
+      [-14, 0, 14].forEach(dx => {
+        baseCtx.beginPath();
+        baseCtx.moveTo(270 + dx, 118);
+        baseCtx.lineTo(270 + dx * 0.85, 135);
+        baseCtx.stroke();
+      });
+
+      // Eyes
+      baseCtx.fillStyle = '#0f172a';
+      baseCtx.beginPath();
+      baseCtx.arc(246, 168, 7.5, 0, Math.PI * 2);
+      baseCtx.arc(294, 168, 7.5, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Eye shine
+      baseCtx.fillStyle = '#ffffff';
+      baseCtx.beginPath();
+      baseCtx.arc(243.5, 165.5, 2.5, 0, Math.PI * 2);
+      baseCtx.arc(291.5, 165.5, 2.5, 0, Math.PI * 2);
+      baseCtx.fill();
+
+      // Nose
+      baseCtx.fillStyle = '#f43f5e';
+      baseCtx.beginPath();
+      baseCtx.moveTo(263, 183);
+      baseCtx.lineTo(277, 183);
+      baseCtx.lineTo(270, 191);
+      baseCtx.closePath();
+      baseCtx.fill();
+
+      // Mouth
+      baseCtx.strokeStyle = '#7c2d12';
+      baseCtx.lineWidth = 2.5;
+      baseCtx.beginPath();
+      baseCtx.arc(262, 194, 8, 0.1 * Math.PI, 0.85 * Math.PI);
+      baseCtx.stroke();
+      baseCtx.beginPath();
+      baseCtx.arc(278, 194, 8, 0.15 * Math.PI, 0.9 * Math.PI);
+      baseCtx.stroke();
+
+      // Whiskers
+      baseCtx.strokeStyle = '#9a3412';
+      baseCtx.lineWidth = 1.8;
+      [
+        [226, 180, 188, 175], [225, 188, 186, 190], [228, 196, 192, 204],
+        [314, 180, 352, 175], [315, 188, 354, 190], [312, 196, 348, 204]
+      ].forEach(([x1, y1, x2, y2]) => {
+        baseCtx.beginPath();
+        baseCtx.moveTo(x1, y1);
+        baseCtx.lineTo(x2, y2);
+        baseCtx.stroke();
+      });
+    }
+
+    function getCanvasPos(e) {
+      const rect = maskCanvas.getBoundingClientRect();
+      const scaleX = maskCanvas.width / rect.width;
+      const scaleY = maskCanvas.height / rect.height;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
+    function startDraw(e) {
+      if (isGenerating) return;
+      e.preventDefault();
+      isDrawing = true;
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+      const pos = getCanvasPos(e);
+      maskCtx.strokeStyle = '#4f46e5';
+      maskCtx.fillStyle = '#4f46e5';
+      maskCtx.lineWidth = Number(brushSizeInput.value);
+      maskCtx.lineCap = 'round';
+      maskCtx.lineJoin = 'round';
+      maskCtx.beginPath();
+      maskCtx.moveTo(pos.x, pos.y);
+      maskCtx.arc(pos.x, pos.y, Number(brushSizeInput.value) / 2, 0, Math.PI * 2);
+      maskCtx.fill();
+      maskCtx.beginPath();
+      maskCtx.moveTo(pos.x, pos.y);
+    }
+
+    function moveDraw(e) {
+      if (!isDrawing || isGenerating) return;
+      e.preventDefault();
+      const pos = getCanvasPos(e);
+      maskCtx.lineTo(pos.x, pos.y);
+      maskCtx.stroke();
+    }
+
+    function endDraw() {
+      if (!isDrawing) return;
+      isDrawing = false;
+      maskCtx.closePath();
+      updateMaskMetrics();
+    }
+
+    function getMaskBounds() {
+      const { width, height } = maskCanvas;
+      const data = maskCtx.getImageData(0, 0, width, height).data;
+      let minX = width, minY = height, maxX = 0, maxY = 0, painted = 0;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const alpha = data[(y * width + x) * 4 + 3];
+          if (alpha > 20) {
+            painted++;
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      if (painted === 0) return null;
+      return {
+        x_min: minX,
+        x_max: maxX,
+        y_min: minY,
+        y_max: maxY,
+        width: maxX - minX,
+        height: maxY - minY,
+        coveragePct: Number(((painted / (width * height)) * 100).toFixed(1))
+      };
+    }
+
+    function updateMaskMetrics() {
+      const b = getMaskBounds();
+      if (!b) {
+        maskCoordsText.textContent = 'Spatial Mask: None (paint over the target area on the image)';
+      } else {
+        maskCoordsText.textContent = `Mask Bounds: x[${b.x_min}–${b.x_max}], y[${b.y_min}–${b.y_max}] (${b.coveragePct}% area)`;
+      }
+    }
+
+    function setBadge(el, state, text) {
+      el.className = state === 'pass' ? 'badge-pass' : state === 'fail' ? 'badge-fail' : 'badge-wait';
+      el.textContent = text;
+    }
+
+    function resetBadges() {
+      setBadge(chkMask, 'wait', 'Waiting');
+      setBadge(chkScope, 'wait', 'Waiting');
+      setBadge(chkSingle, 'wait', 'Waiting');
+      setBadge(chkSize, 'wait', 'Waiting');
+    }
+
+    // Simulated LLM Intent Parser (matches 02_PROMPT_LOG.md rules)
+    function simulateLLMParser(rawPrompt) {
+      const text = rawPrompt.trim();
+      const lower = text.toLowerCase();
+
+      if (!text) {
+        return { error: 'Empty prompt. Please describe the localized edit to apply inside the mask.' };
+      }
+
+      // Test B: Global style / scene modification conflict
+      if (/(whole image|entire|cyberpunk|night time|nighttime|background|everything|all over|global style)/.test(lower)) {
+        return {
+          error: 'The prompt requests a global style or scene change rather than a localized object edit. This tool is restricted to regional edits inside the spatial mask.'
+        };
+      }
+
+      // Lab 4: Ambiguous / non-concrete emotional prompt
+      if (/(happier|sadder|better|nicer|prettier|cooler|mood|emotion|fix it)/.test(lower)) {
+        return {
+          error: 'Ambiguous or abstract attribute detected. Please specify a concrete object or color change inside the masked area.'
+        };
+      }
+
+      // Lab 3 Revision: Multi-object detection in a single prompt
+      const itemWords = ['hat', 'beanie', 'cap', 'shoes', 'boots', 'sunglasses', 'glasses', 'scarf', 'crown', 'bow', 'flower', 'collar', 'coat'];
+      const foundItems = itemWords.filter(item => new RegExp(`\\b${item}\\b`).test(lower));
+      if (foundItems.length > 1 && /\b(and|with|plus)\b|,|&/.test(lower)) {
+        return {
+          operation: 'add',
+          target_objects: foundItems,
+          error: 'Multiple target objects detected in one prompt. Please apply edits one at a time for precise spatial mask control.'
+        };
+      }
+
+      // Normal localized intent extraction
+      let operation = 'add';
+      if (/\b(remove|erase|delete|clear)\b/.test(lower)) operation = 'remove';
+      else if (/\b(change|modify|turn|recolor|replace)\b/.test(lower)) operation = 'modify';
+
+      let target_object = 'custom object';
+      if (/winter hat|beanie/.test(lower)) target_object = 'winter hat';
+      else if (/hat|cap/.test(lower)) target_object = 'hat';
+      else if (/sunglasses/.test(lower)) target_object = 'sunglasses';
+      else if (/glasses/.test(lower)) target_object = 'glasses';
+      else if (/scarf/.test(lower)) target_object = 'scarf';
+      else if (/crown/.test(lower)) target_object = 'crown';
+      else if (/bow/.test(lower)) target_object = 'bow tie';
+      else if (/flower/.test(lower)) target_object = 'flower';
+      else {
+        const cleaned = lower.replace(/\b(add|put|draw|place|a|an|the|on|to|onto|in|inside|cat|head|remove|erase|change|modify)\b/g, '').trim();
+        if (cleaned) target_object = cleaned;
+      }
+
+      const colorMap = [
+        ['bright red', '#dc2626'],
+        ['red', '#dc2626'],
+        ['blue', '#2563eb'],
+        ['yellow', '#eab308'],
+        ['gold', '#d97706'],
+        ['green', '#16a34a'],
+        ['purple', '#7c3aed'],
+        ['pink', '#ec4899'],
+        ['black', '#1e293b'],
+        ['white', '#f8fafc']
+      ];
+
+      let attrLabel = 'default';
+      let hexColor = '#dc2626';
+      for (const [name, hex] of colorMap) {
+        if (lower.includes(name)) {
+          attrLabel = name;
+          hexColor = hex;
+          break;
+        }
+      }
+
+      return {
+        operation,
+        target_object,
+        attributes: attrLabel,
+        _hex: hexColor
+      };
+    }
+
+    function drawErrorOutline(bounds) {
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+      if (!bounds) return;
+      fxCtx.save();
+      fxCtx.strokeStyle = '#dc2626';
+      fxCtx.lineWidth = 3.5;
+      fxCtx.setLineDash([8, 5]);
+      fxCtx.shadowColor = 'rgba(220, 38, 38, 0.75)';
+      fxCtx.shadowBlur = 14;
+      fxCtx.strokeRect(bounds.x_min - 4, bounds.y_min - 4, bounds.width + 8, bounds.height + 8);
+      fxCtx.restore();
+    }
+
+    function startGlowAnimation(bounds) {
+      const startTime = performance.now();
+      function frame(now) {
+        if (!isGenerating) return;
+        const t = (now - startTime) / 1000;
+        const pulse = 0.5 + 0.5 * Math.sin(t * 7);
+        fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+        fxCtx.save();
+        fxCtx.strokeStyle = '#0ea5e9';
+        fxCtx.lineWidth = 3 + pulse * 2.5;
+        fxCtx.setLineDash([10, 6]);
+        fxCtx.lineDashOffset = -t * 36;
+        fxCtx.shadowColor = `rgba(14, 165, 233, ${0.55 + pulse * 0.4})`;
+        fxCtx.shadowBlur = 10 + pulse * 14;
+        fxCtx.strokeRect(bounds.x_min - 4, bounds.y_min - 4, bounds.width + 8, bounds.height + 8);
+        fxCtx.restore();
+        animFrameId = requestAnimationFrame(frame);
+      }
+      animFrameId = requestAnimationFrame(frame);
+    }
+
+    // Simulated Constrained Image Rendering strictly inside mask bounds
+    function drawSingleEdit(ctx, item) {
+      const { parsed, bounds } = item;
+      const cx = (bounds.x_min + bounds.x_max) / 2;
+      const cy = (bounds.y_min + bounds.y_max) / 2;
+      const w = Math.max(bounds.width, 36);
+      const h = Math.max(bounds.height, 28);
+      const color = parsed._hex || '#dc2626';
+
+      ctx.save();
+      // Clip strictly to mask bounding box to visually guarantee zero global pixel drift
+      ctx.beginPath();
+      ctx.rect(bounds.x_min - 6, bounds.y_min - 6, bounds.width + 12, bounds.height + 12);
+      ctx.clip();
+
+      if (parsed.operation === 'remove') {
+        ctx.fillStyle = '#e0f2fe';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (parsed.target_object.includes('hat')) {
+        // Pom-pom
+        ctx.fillStyle = '#fef2f2';
+        ctx.beginPath();
+        ctx.arc(cx, bounds.y_min + h * 0.14, Math.min(w, h) * 0.14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Dome of winter hat
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.ellipse(cx, bounds.y_min + h * 0.68, w * 0.46, h * 0.52, 0, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Ribbed cuff
+        ctx.fillStyle = '#991b1b';
+        if (color !== '#dc2626') ctx.fillStyle = color;
+        ctx.globalAlpha = 0.92;
+        ctx.beginPath();
+        ctx.roundRect(cx - w * 0.48, bounds.y_min + h * 0.62, w * 0.96, h * 0.28, 10);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Cuff knit lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 2;
+        for (let i = -3; i <= 3; i++) {
+          const lx = cx + i * (w * 0.12);
+          ctx.beginPath();
+          ctx.moveTo(lx, bounds.y_min + h * 0.65);
+          ctx.lineTo(lx, bounds.y_min + h * 0.87);
+          ctx.stroke();
+        }
+      } else if (parsed.target_object.includes('glasses')) {
+        const lensW = w * 0.38;
+        const lensH = Math.min(h * 0.58, lensW * 0.72);
+        ctx.fillStyle = parsed._hex === '#dc2626' ? '#1e293b' : color;
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(cx - lensW - 6, cy - lensH / 2, lensW, lensH, 8);
+        ctx.roundRect(cx + 6, cy - lensH / 2, lensW, lensH, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        // Bridge
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, cy - 2);
+        ctx.lineTo(cx + 6, cy - 2);
+        ctx.stroke();
+      } else if (parsed.target_object.includes('scarf')) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(cx - w * 0.48, cy - h * 0.35, w * 0.96, h * 0.42, 12);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.roundRect(cx + w * 0.12, cy - h * 0.1, w * 0.24, h * 0.58, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.42, cy - h * 0.14);
+        ctx.lineTo(cx + w * 0.42, cy - h * 0.14);
+        ctx.stroke();
+      } else if (parsed.target_object.includes('crown')) {
+        ctx.fillStyle = '#facc15';
+        ctx.strokeStyle = '#ca8a04';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.42, bounds.y_max - 4);
+        ctx.lineTo(cx - w * 0.46, bounds.y_min + h * 0.22);
+        ctx.lineTo(cx - w * 0.18, bounds.y_min + h * 0.52);
+        ctx.lineTo(cx, bounds.y_min + h * 0.12);
+        ctx.lineTo(cx + w * 0.18, bounds.y_min + h * 0.52);
+        ctx.lineTo(cx + w * 0.46, bounds.y_min + h * 0.22);
+        ctx.lineTo(cx + w * 0.42, bounds.y_max - 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // Generic constrained simulated object placeholder
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.roundRect(cx - w * 0.42, cy - h * 0.36, w * 0.84, h * 0.72, 12);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(parsed.target_object, cx, cy);
+      }
+
+      ctx.restore();
+    }
+
+    function redrawAllEdits() {
+      editCtx.clearRect(0, 0, editCanvas.width, editCanvas.height);
+      editHistory.forEach(item => drawSingleEdit(editCtx, item));
+      historyText.textContent = `Committed Edits: ${editHistory.length}`;
+      undoBtn.disabled = editHistory.length === 0;
+      redoBtn.disabled = redoStack.length === 0;
+    }
+
+    function runGenerate() {
+      if (isGenerating) return;
+      clearToast();
+      resetBadges();
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+      const bounds = getMaskBounds();
+      const prompt = promptInput.value.trim();
+      const parsed = simulateLLMParser(prompt);
+
+      // Display clean JSON (strip internal _hex helper)
+      const displayJson = { ...parsed };
+      delete displayJson._hex;
+      if (bounds && !displayJson.error) {
+        displayJson.mask_bounds = {
+          x_min: bounds.x_min,
+          x_max: bounds.x_max,
+          y_min: bounds.y_min,
+          y_max: bounds.y_max
+        };
+      }
+      jsonOutput.textContent = JSON.stringify(displayJson, null, 2);
+
+      // Guardrail 1: Mask present
+      if (!bounds) {
+        setBadge(chkMask, 'fail', 'FAIL — No Mask');
+        showToast('danger', 'Validation Rejected: No spatial mask detected. Please paint over the target region with the brush tool first.');
+        addLog('Blocked edit: spatial mask missing.');
+        return;
+      }
+      setBadge(chkMask, 'pass', 'PASS');
+
+      // Guardrail 2 & 3: Parser errors (Global conflict / Ambiguous / Multi-object)
+      if (parsed.error) {
+        if (parsed.target_objects) {
+          setBadge(chkScope, 'pass', 'PASS');
+          setBadge(chkSingle, 'fail', 'FAIL — Multi-Object');
+        } else {
+          setBadge(chkScope, 'fail', 'FAIL — Out of Scope');
+        }
+        drawErrorOutline(bounds);
+        showToast('danger', `Repair Turn (G11): ${parsed.error}`);
+        addLog(`Fallback triggered: ${parsed.error}`);
+        return;
+      }
+      setBadge(chkScope, 'pass', 'PASS');
+      setBadge(chkSingle, 'pass', 'PASS');
+
+      // Guardrail 4: Mask area sufficiency (Lab 7 G11)
+      if (bounds.coveragePct < 1.2) {
+        setBadge(chkSize, 'fail', `FAIL — Too Small (${bounds.coveragePct}%)`);
+        drawErrorOutline(bounds);
+        showToast('danger', `Repair Turn (G11): The masked area (${bounds.coveragePct}%) is too small for "${parsed.target_object}". Please paint a slightly larger mask.`);
+        addLog(`G11 block: mask area (${bounds.coveragePct}%) too small for '${parsed.target_object}'.`);
+        return;
+      }
+      setBadge(chkSize, 'pass', `PASS (${bounds.coveragePct}%)`);
+
+      // All guardrails passed -> Start visible processing phase (Lab 2 evaluation gulf bridge)
+      isGenerating = true;
+      generateBtn.disabled = true;
+      statusOverlay.classList.add('visible');
+      startGlowAnimation(bounds);
+      addLog(`Generating "${parsed.attributes} ${parsed.target_object}" strictly inside x[${bounds.x_min}-${bounds.x_max}], y[${bounds.y_min}-${bounds.y_max}]...`);
+
+      setTimeout(() => {
+        isGenerating = false;
+        generateBtn.disabled = false;
+        statusOverlay.classList.remove('visible');
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+        fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+        editHistory.push({ parsed, bounds });
+        redoStack = [];
+        redrawAllEdits();
+        showToast('success', `Edit applied strictly inside mask bounds (${bounds.coveragePct}% area). Click Undo to revert while keeping your mask.`);
+        addLog(`Success: rendered simulated '${parsed.target_object}' inside mask.`);
+      }, 1350);
+    }
+
+    // Event bindings
+    brushSizeInput.addEventListener('input', () => {
+      brushSizeVal.textContent = `${brushSizeInput.value}px`;
+    });
+
+    maskCanvas.addEventListener('mousedown', startDraw);
+    window.addEventListener('mousemove', moveDraw);
+    window.addEventListener('mouseup', endDraw);
+    maskCanvas.addEventListener('touchstart', startDraw, { passive: false });
+    window.addEventListener('touchmove', moveDraw, { passive: false });
+    window.addEventListener('touchend', endDraw);
+
+    clearMaskBtn.addEventListener('click', () => {
+      maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+      updateMaskMetrics();
+      clearToast();
+      addLog('Spatial mask cleared by user.');
+    });
+
+    undoBtn.addEventListener('click', () => {
+      if (editHistory.length === 0) return;
+      const undone = editHistory.pop();
+      redoStack.push(undone);
+      redrawAllEdits();
+      // Amershi G12: Keep maskCanvas & promptInput intact!
+      showToast('warn', 'Undo complete (G9/G12): Image reverted, while your spatial mask and prompt were preserved for rapid iteration.');
+      addLog('Undo executed: image reverted; spatial mask & prompt preserved (G12).');
+    });
+
+    redoBtn.addEventListener('click', () => {
+      if (redoStack.length === 0) return;
+      editHistory.push(redoStack.pop());
+      redrawAllEdits();
+      showToast('success', 'Redo complete: Previous localized edit restored.');
+      addLog('Redo executed.');
+    });
+
+    resetAllBtn.addEventListener('click', () => {
+      editHistory = [];
+      redoStack = [];
+      maskCtx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+      fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+      redrawAllEdits();
+      updateMaskMetrics();
+      resetBadges();
+      clearToast();
+      jsonOutput.textContent = '{\n  "status": "idle",\n  "hint": "Paint a brush mask on the cat (e.g., head), enter a prompt, and click Generate Edit."\n}';
+      addLog('Workspace reset.');
+    });
+
+    generateBtn.addEventListener('click', runGenerate);
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runGenerate();
+    });
+
+    document.querySelectorAll('.presets button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        promptInput.value = btn.getAttribute('data-prompt');
+        clearToast();
+      });
+    });
+
+    // Init
+    drawBaseScene();
+    updateMaskMetrics();
+  </script>
+</body>
+</html>
